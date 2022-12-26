@@ -8,10 +8,9 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.util.Arrays;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * 将一行数据转换成JavaBean
@@ -19,35 +18,49 @@ import java.util.stream.Collectors;
  * @author byx
  */
 public class BeanRowMapper<T> implements RowMapper<T> {
-	private final Class<T> type;
+	private final Class<T> clazz;
 
-	public BeanRowMapper(Class<T> type) {
-		this.type = type;
+	public BeanRowMapper(Class<T> clazz) {
+		this.clazz = clazz;
 	}
 
 	@Override
 	public T map(ResultSet rs) {
 		try {
-			int count = rs.getMetaData().getColumnCount();
-			T bean = type.getDeclaredConstructor().newInstance();
-			//排除静态、常量
-			Set<String> fieldSet = Arrays.stream(type.getDeclaredFields()).filter(d -> !Modifier.isStatic(d.getModifiers()) && !Modifier.isFinal(d.getModifiers()) && !Modifier.isSynchronized(d.getModifiers())).map(Field::getName).collect(Collectors.toSet());
-			for (int i = 1; i <= count; i++) {
-				String propertyName = getPropertyName(fieldSet, rs.getMetaData().getColumnLabel(i));
-				if (propertyName != null) {
-					PropertyDescriptor pd = new PropertyDescriptor(propertyName, type);
-					Method setter = pd.getWriteMethod();
-					setter.invoke(bean, getValue(pd, rs, i));
-				}
+			if (rs.next()) {
+				return handle(rs, getBeanField());
 			}
-			return bean;
 		} catch (Exception e) {
-			throw new RuntimeException(e.getMessage(), e);
+			throw new RuntimeException(e);
 		}
+		return null;
 	}
 
-	private Object getValue(PropertyDescriptor pd, ResultSet rs, int index) throws SQLException {
-		String typeName = pd.getPropertyType().getTypeName();
+	public T handle(ResultSet rs, Set<String> fieldSet) throws Exception {
+		int count = rs.getMetaData().getColumnCount();
+		T bean = clazz.getDeclaredConstructor().newInstance();
+		for (int i = 1; i <= count; i++) {
+			String propertyName = getPropertyName(fieldSet, rs.getMetaData().getColumnLabel(i));
+			if (propertyName != null) {
+				PropertyDescriptor pd = new PropertyDescriptor(propertyName, clazz);
+				Method setter = pd.getWriteMethod();
+				setter.invoke(bean, getValue(pd.getPropertyType().getTypeName(), rs, i));
+			}
+		}
+		return bean;
+	}
+
+	public Set<String> getBeanField() {
+		Set<String> fieldSet = new HashSet<>();
+		for (Field field : clazz.getDeclaredFields()) {
+			if (!Modifier.isStatic(field.getModifiers()) && !Modifier.isFinal(field.getModifiers()) && !Modifier.isSynchronized(field.getModifiers())) {
+				fieldSet.add(field.getName());
+			}
+		}
+		return fieldSet;
+	}
+
+	public Object getValue(String typeName, ResultSet rs, int index) throws SQLException {
 		if (typeName.equals(String.class.getTypeName())) {
 			return rs.getString(index);
 		} else if (typeName.equals(BigDecimal.class.getTypeName())) {
@@ -81,14 +94,7 @@ public class BeanRowMapper<T> implements RowMapper<T> {
 		return rs.getObject(index);
 	}
 
-	/**
-	 * 获取db-bean字段
-	 *
-	 * @param fieldSet     bean所有字段
-	 * @param propertyName db字段
-	 * @return 通过转换得到bean存在的字段
-	 */
-	private String getPropertyName(Set<String> fieldSet, String propertyName) {
+	public String getPropertyName(Set<String> fieldSet, String propertyName) {
 		if (fieldSet.contains(propertyName)) {
 			return propertyName;
 		}
