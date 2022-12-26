@@ -1,5 +1,8 @@
 package byx.util.jdbc.core;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
 /**
  * 转换只有一行的结果集
  *
@@ -13,9 +16,9 @@ public class SingleRowRecordMapper<T> implements RecordMapper<T> {
     }
 
     @Override
-    public T map(Record record) {
-        if (record.next()) {
-            return rowMapper.map(record.getCurrentRow());
+    public T map(ResultSet rs) throws SQLException {
+        if (rs.next()) {
+            return rowMapper.map(rs);
         }
         return null;
     }

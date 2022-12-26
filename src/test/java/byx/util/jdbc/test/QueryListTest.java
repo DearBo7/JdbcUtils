@@ -1,10 +1,10 @@
 package byx.util.jdbc.test;
 
 import byx.util.jdbc.core.BeanRowMapper;
-import byx.util.jdbc.core.Row;
 import byx.util.jdbc.test.domain.User;
 import org.junit.jupiter.api.Test;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,11 +24,10 @@ public class QueryListTest extends BaseTest {
         List<User> users = jdbcUtils.query("SELECT * FROM users", record -> {
             List<User> us = new ArrayList<>();
             while (record.next()) {
-                Row row = record.getCurrentRow();
                 User u = new User();
-                u.setId(row.getInt("id"));
-                u.setUsername(row.getString("username"));
-                u.setPassword(row.getString("password"));
+                u.setId(record.getInt("id"));
+                u.setUsername(record.getString("username"));
+                u.setPassword(record.getString("password"));
                 us.add(u);
             }
             return us;
@@ -42,9 +41,13 @@ public class QueryListTest extends BaseTest {
     public void test3() {
         List<User> users = jdbcUtils.queryList("SELECT * FROM users", row -> {
             User u = new User();
-            u.setId(row.getInt("id"));
-            u.setUsername(row.getString("username"));
-            u.setPassword(row.getString("password"));
+            try {
+                u.setId(row.getInt("id"));
+                u.setUsername(row.getString("username"));
+                u.setPassword(row.getString("password"));
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
             return u;
         });
 
@@ -70,7 +73,13 @@ public class QueryListTest extends BaseTest {
 
     @Test
     public void test6() {
-        List<String> usernames = jdbcUtils.queryList("SELECT * FROM users", row -> row.getString("username"));
+        List<String> usernames = jdbcUtils.queryList("SELECT * FROM users", row -> {
+            try {
+                return row.getString("username");
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        });
 
         assertNotNull(usernames);
         assertEquals(5, usernames.size());
